@@ -11,6 +11,9 @@ from astropy.io import fits
 def get_needlet_bands(needlets,B,lmax,b_max,n_bands):
     # needlets: 1: mexican needlets; 2: standard needlets
     # B: parameter which sets widht of needlet bands
+    # lmax: maximum multipole
+    # b_max: maximum band to merge in the first needlet band
+    # n_bands: total number of bands
     
     j_min = 0
     j_max = b_max + n_bands
@@ -32,7 +35,7 @@ def get_needlet_bands(needlets,B,lmax,b_max,n_bands):
     
     return b, band
 
-
+# function that computes the nside of needlet maps corresponding to the input needlet windows b
 def get_nside_nl(b,nside,lmax,resol_nl):
     if resol_nl:
         try:
@@ -60,7 +63,19 @@ def get_nside_nl(b,nside,lmax,resol_nl):
 
     return nside_nl, lmax_nl
 
-def nilc(alm_map,alm_fore,alm_noi,n_freq,fwhms,fwhm_out,b,lmax,nside,bias,mask=None,resol_nl=True):
+
+def nilc(alm_map,alm_fore,alm_noi,b,lmax,nside,bias,resol_nl=True):
+    # alm_map: alms of input maps, dimension should be (n_freqs,lm)
+    # alm_fore: alms of input foregrounds, dimension should be (n_freqs,lm)
+    # alm_map: alms of input noise, dimension should be (n_freqs,lm)
+    # b: set of needlet windows, with shape (n_bands,lmax+1)
+    # bias: bias parameter. The covariance matrix elements in each pixel can be estimated as the average of products of needlet maps within a Gaussian domain centered in that pixel.
+    #       bias sets the size of these domains. bias should be smaller than 0.01. Good choice is 0.005.
+    #       if bias=0, covariance matrix elements are estimated with averages over the whole sphere
+    # resol_nl: if True, needlet maps are generated at different Nside depending on the maximum multipole accessed by the needlet windows. 
+    #           if False, all needlet maps are generated at input Nside.
+
+    n_freq = alm_map.shape[0]    
     n_bands=b.shape[0]
     lm=hp.Alm.getsize(lmax)
     npix=12*nside**2
@@ -68,7 +83,8 @@ def nilc(alm_map,alm_fore,alm_noi,n_freq,fwhms,fwhm_out,b,lmax,nside,bias,mask=N
     alm_out = np.zeros(lm,dtype=complex)
     alm_fres = np.zeros(lm,dtype=complex)
     alm_nres = np.zeros(lm,dtype=complex)
-
+    
+    # needlet component separation
     for j in (range(n_bands)):
         nside_nl, lmax_nl = get_nside_nl(b[j],nside,lmax,resol_nl)
              
@@ -81,6 +97,7 @@ def nilc(alm_map,alm_fore,alm_noi,n_freq,fwhms,fwhm_out,b,lmax,nside,bias,mask=N
         
         lm_nl = hp.Alm.getsize(lmax_nl)
         
+        # needlet decomposition
         for i in range(n_freq):
             alm_map_nl = hp.almxfl(alm_map[i],(b)[j])
             alm_fore_nl = hp.almxfl(alm_fore[i],(b)[j])
@@ -103,6 +120,7 @@ def nilc(alm_map,alm_fore,alm_noi,n_freq,fwhms,fwhm_out,b,lmax,nside,bias,mask=N
             noi_nl[i]=hp.alm2map(alm_noi_nl_,nside=nside_nl,lmax=lmax_nl)
             fore_nl[i]=hp.alm2map(alm_fore_nl_,nside=nside_nl,lmax=lmax_nl)
         
+        # computation of covariance, NILC weights
         if bias == 0.:
             cov=np.mean(np.einsum('ik,jk->ijk', map_nl, map_nl),axis=2)
             inv_cov=np.linalg.inv(cov)
@@ -140,7 +158,8 @@ def nilc(alm_map,alm_fore,alm_noi,n_freq,fwhms,fwhm_out,b,lmax,nside,bias,mask=N
             cmb_nl = np.einsum('ik,ik->k', w, map_nl)
             fres_nl = np.einsum('ik,ik->k', w, fore_nl)
             nres_nl = np.einsum('ik,ik->k', w, noi_nl)
-
+        
+        # inverse needlet transform
         alm_cmb_nl = hp.almxfl(hp.map2alm(cmb_nl,lmax=lmax_nl,pol=False),b[j,:lmax_nl+1])
         alm_fres_nl = hp.almxfl(hp.map2alm(fres_nl,lmax=lmax_nl,pol=False),b[j,:lmax_nl+1])
         alm_nres_nl = hp.almxfl(hp.map2alm(nres_nl,lmax=lmax_nl,pol=False),b[j,:lmax_nl+1])
