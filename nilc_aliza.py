@@ -169,7 +169,7 @@ def nilc(alm_map,alm_fore,alm_noi,b,lmax,nside,bias,resol_nl=True):
                 ind=hp.Alm.getidx(lmax, l, m)
                 ind_nl=hp.Alm.getidx(lmax_nl, l, m)
 
-                alm_cmb[ind] += alm_cmb_nl[ind_nl]
+                alm_out[ind] += alm_cmb_nl[ind_nl]
                 alm_nres[ind] += alm_nres_nl[ind_nl]
                 alm_fres[ind] += alm_fres_nl[ind_nl]
         
